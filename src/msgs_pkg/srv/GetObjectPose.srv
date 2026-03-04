@@ -1,0 +1,11 @@
+# Request (요청 - 비어있음)
+---
+# Response (응답)
+float64 x
+float64 y
+float64 z
+# float64 rx
+# float64 ry
+float64 rz
+bool success
+int32 detected_id

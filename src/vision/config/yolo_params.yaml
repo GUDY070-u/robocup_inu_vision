@@ -1,0 +1,12 @@
+yolo_node:
+  ros__parameters:
+    image_topic: "/camera/color/image_raw"
+
+    model_path: "/home/recl3090/ros2_ws/src/vision/yolo_models/0128train/weights/best.pt"
+
+    conf_thres: 0.8
+    imgsz: 640
+    device: "cuda:0"
+
+    publish_debug_image: true
+

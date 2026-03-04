@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd"
+             schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>vision</name>
+  <version>0.0.0</version>
+  <description>YOLO 3D vision node</description>
+
+  <maintainer email="han@todo.todo">han</maintainer>
+  <license>Apache-2.0</license>
+
+  <!-- ROS runtime deps -->
+  <depend>rclpy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>message_filters</depend>
+  <depend>msgs_pkg</depend>
+
+  <!-- test -->
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
+

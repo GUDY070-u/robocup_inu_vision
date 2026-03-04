@@ -1,0 +1,4 @@
+int8 ws
+---
+bool success
+string message
