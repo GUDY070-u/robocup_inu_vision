@@ -16,8 +16,8 @@ def generate_launch_description():
         output="screen",
     )
 
-    # 2) ArUco 서비스
-    multi_aruco = Node(
+    # 2) yolo_3d 서비스
+    yolo_3d = Node(
         package="vision",
         executable="yolo_3d_node",
         name="yolo_3d_node",
@@ -52,7 +52,7 @@ def generate_launch_description():
     return LaunchDescription([
         init_loaded_count,
         realsense_launch,
-        multi_aruco,
+        yolo_3d,
         gripper,
         multi_load,
         multi_unload,
