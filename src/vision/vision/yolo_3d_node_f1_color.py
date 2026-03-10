@@ -74,8 +74,8 @@ class Yolo3DNode(Node):
         self.scene_pcd_vis = o3d.geometry.PointCloud()
         self.vis.add_geometry(self.scene_pcd_vis)
 
-        # self.cam_axis = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
-        # self.vis.add_geometry(self.cam_axis)
+        self.cam_axis = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
+        self.vis.add_geometry(self.cam_axis)
 
         self.track_axis_map = {}      # track_id -> axis mesh
         self.track_axis_trans = {}    # track_id -> applied transform
@@ -679,10 +679,19 @@ class Yolo3DNode(Node):
                 self.scene_pcd_vis.colors = merged_pcd.colors
                 self.vis.update_geometry(self.scene_pcd_vis)
 
-            # 처음 한 번만 전체가 보이도록 자동 카메라 설정
+                center = np.asarray(merged_pcd.get_center(), dtype=np.float64)
+                if np.all(np.isfinite(center)):
+                    self.last_scene_center = center
+
+            ctr = self.vis.get_view_control()
+
             if not self.view_inited:
-                self.vis.reset_view_point(True)
+                ctr.set_front([0.0, 0.0, -1.0])
+                ctr.set_up([0.0, -1.0, 0.0])
+                ctr.set_zoom(0.7)
                 self.view_inited = True
+
+            ctr.set_lookat(self.last_scene_center.tolist())
 
             self.vis.poll_events()
             self.vis.update_renderer()

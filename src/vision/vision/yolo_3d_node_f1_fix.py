@@ -74,8 +74,8 @@ class Yolo3DNode(Node):
         self.scene_pcd_vis = o3d.geometry.PointCloud()
         self.vis.add_geometry(self.scene_pcd_vis)
 
-        # self.cam_axis = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
-        # self.vis.add_geometry(self.cam_axis)
+        self.cam_axis = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
+        self.vis.add_geometry(self.cam_axis)
 
         self.track_axis_map = {}      # track_id -> axis mesh
         self.track_axis_trans = {}    # track_id -> applied transform
@@ -549,22 +549,16 @@ class Yolo3DNode(Node):
         except Exception as e:
             self.get_logger().warn(f"Ground removal failed. Use original valid cloud. error={e}")
 
-        # --------------------------------------------------
-        # Scene color initialization
-        # --------------------------------------------------
-        merged_pcd = None
-        scene_points = ground_removed_pts
-        scene_colors = None
+        merged_points = []
+        merged_colors = []
 
-        if len(scene_points) > 0:
-            scene_colors = np.tile(
-                np.array([[0.35, 0.35, 0.35]], dtype=np.float64),
-                (len(scene_points), 1)
-            )
+        # Background points in gray
+        if len(ground_removed_pts) > 0:
+            merged_points.append(ground_removed_pts)
+            bg_color = np.tile(np.array([[0.35, 0.35, 0.35]], dtype=np.float64), (len(ground_removed_pts), 1))
+            merged_colors.append(bg_color)
 
-        # --------------------------------------------------
         # Per detection
-        # --------------------------------------------------
         for idx, (x1, y1, x2, y2) in enumerate(boxes.astype(int)):
             cls_id = int(cls_ids[idx])
             det_conf = float(confs[idx])
@@ -582,10 +576,10 @@ class Yolo3DNode(Node):
             if len(roi_pts) < cfg["min_pts"]:
                 continue
 
-            # YAML color를 scene color에 직접 반영
-            if scene_colors is not None:
-                roi_color = np.array(cfg["color"], dtype=np.float64)
-                scene_colors[roi_mask] = roi_color
+            # Color ROI points by object id
+            roi_color = np.array(cfg["color"], dtype=np.float64)
+            merged_points.append(roi_pts)
+            merged_colors.append(np.tile(roi_color.reshape(1, 3), (len(roi_pts), 1)))
 
             bbox_center = ((x1 + x2) / 2.0, (y1 + y2) / 2.0)
             track_id = self.match_or_create_track(cls_id, bbox_center)
@@ -652,17 +646,17 @@ class Yolo3DNode(Node):
 
         self.cleanup_stale_tracks()
 
-        # --------------------------------------------------
-        # Build final colored scene point cloud
-        # --------------------------------------------------
-        if scene_colors is not None and len(scene_points) > 0:
+        merged_pcd = None
+        if merged_points:
             try:
+                all_pts = np.vstack(merged_points)
+                all_cols = np.vstack(merged_colors)
+
                 merged_pcd = o3d.geometry.PointCloud()
-                merged_pcd.points = o3d.utility.Vector3dVector(scene_points)
-                merged_pcd.colors = o3d.utility.Vector3dVector(scene_colors)
+                merged_pcd.points = o3d.utility.Vector3dVector(all_pts)
+                merged_pcd.colors = o3d.utility.Vector3dVector(all_cols)
             except Exception as e:
                 self.get_logger().warn(f"Merged point cloud build failed: {e}")
-                merged_pcd = None
 
         self.update_visualization(color_image, merged_pcd)
 
@@ -679,10 +673,21 @@ class Yolo3DNode(Node):
                 self.scene_pcd_vis.colors = merged_pcd.colors
                 self.vis.update_geometry(self.scene_pcd_vis)
 
-            # 처음 한 번만 전체가 보이도록 자동 카메라 설정
+                center = np.asarray(merged_pcd.get_center(), dtype=np.float64)
+                if np.all(np.isfinite(center)):
+                    self.last_scene_center = center
+
+            ctr = self.vis.get_view_control()
+
             if not self.view_inited:
-                self.vis.reset_view_point(True)
+                ctr.set_front([0.0, 0.0, -1.0])
+                ctr.set_up([0.0, -1.0, 0.0])
+                ctr.set_zoom(0.7)
                 self.view_inited = True
+
+            # 핵심 수정:
+            # 고정 lookat 대신 현재 scene 중심을 기준으로 lookat 유지
+            ctr.set_lookat(self.last_scene_center.tolist())
 
             self.vis.poll_events()
             self.vis.update_renderer()
