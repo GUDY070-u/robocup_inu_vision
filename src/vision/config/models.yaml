@@ -1,0 +1,85 @@
+objects:
+  - id: 4
+    name: "Object_4"
+    stl_path: "/home/user/ros2_ws/src/vision/config/F20_20.stl"
+    thickness: 0.02
+    symmetry:
+      roll: 180.0
+      pitch: 180.0
+      yaw: 90.0
+    icp_dist: 0.05
+    voxel: 0.005
+    min_pts: 50
+    color: [1.0, 0.0, 0.0]
+    axis_size: 0.08
+
+  - id: 5
+    name: "Object_5"
+    stl_path: "/home/user/ros2_ws/src/vision/config/F20_20.stl"
+    thickness: 0.02
+    symmetry:
+      roll: 180.0
+      pitch: 180.0
+      yaw: 90.0
+    icp_dist: 0.05
+    voxel: 0.005
+    min_pts: 50
+    color: [0.0, 1.0, 0.0]
+    axis_size: 0.08
+
+  - id: 8
+    name: "M20_100"
+    stl_path: "/home/user/ros2_ws/src/vision/config/M20_100.stl"
+    thickness: 0.024
+    symmetry:
+      roll: 360.0
+      pitch: 13600
+      yaw: 360.0
+    icp_dist: 0.03
+    voxel: 0.003
+    min_pts: 50
+    color: [1.0, 1.0, 0.0]
+    axis_size: 0.06
+
+  - id: 9
+    name: "M30"
+    stl_path: "/home/user/ros2_ws/src/vision/config/M30.stl"
+    thickness: 0.024
+    symmetry:
+      roll: 180.0
+      pitch: 180.0
+      yaw: 60.0
+    icp_dist: 0.03
+    voxel: 0.003
+    min_pts: 50
+    color: [0.0, 0.0, 1.0]
+    axis_size: 0.06
+
+  - id: 11
+    name: "S40_40_B"
+    stl_path: "/home/user/ros2_ws/src/vision/config/Aluminum4040.stl"
+    thickness: 0.04
+    symmetry:
+      roll: 180.0
+      pitch: 180.0
+      yaw: 90.0
+    icp_dist: 0.05
+    voxel: 0.005
+    min_pts: 50
+    color: [1.0, 0.0, 1.0]
+    axis_size: 0.08
+
+  - id: 12
+    name: "S40_40_G"
+    stl_path: "/home/user/ros2_ws/src/vision/config/Aluminum4040.stl"
+    thickness: 0.04
+    symmetry:
+      roll: 180.0
+      pitch: 180.0
+      yaw: 90.0
+    icp_dist: 0.05
+    voxel: 0.005
+    min_pts: 50
+    color: [0.0, 1.0, 1.0]
+    axis_size: 0.08
+
