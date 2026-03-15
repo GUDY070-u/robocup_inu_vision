@@ -7,6 +7,7 @@ from rclpy.executors import MultiThreadedExecutor
 from std_msgs.msg import String
 from msgs_pkg.srv import RunWS
 
+
 class ManualWorkcellCoordinator(Node):
     def __init__(self):
         super().__init__("manual_coordinator")
@@ -23,7 +24,7 @@ class ManualWorkcellCoordinator(Node):
             self.get_logger().info("서비스가 아직 활성화되지 않았습니다 (load3)...")
         while not self.unload_cli.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("서비스가 아직 활성화되지 않았습니다 (unload3)...")
-        
+
         self.get_logger().info("✅ 모든 서비스 준비 완료. 명령을 입력할 수 있습니다.")
 
         self._busy_lock = threading.Lock()
@@ -35,9 +36,8 @@ class ManualWorkcellCoordinator(Node):
         self.input_thread.start()
 
     def terminal_input_loop(self):
-        """터미널 입력을 기다리는 루프"""
         while rclpy.ok():
-            print("\n" + "="*50)
+            print("\n" + "=" * 50)
             print("명령어 예시: '1 pick' 또는 '2 place' (종료: q)")
             user_input = input(">> 명령 입력: ").strip().lower()
 
@@ -46,7 +46,6 @@ class ManualWorkcellCoordinator(Node):
                 break
 
             try:
-                # 입력 파싱 (예: "1 pick")
                 parts = user_input.split()
                 if len(parts) < 2:
                     print("❌ 잘못된 형식입니다. [번호] [작업] 형태로 입력하세요.")
@@ -63,7 +62,6 @@ class ManualWorkcellCoordinator(Node):
                     print(f"❌ 알 수 없는 작업: {job_type}")
                     continue
 
-                # 작업 실행
                 self.request_job(ws_num, job)
 
             except ValueError:
@@ -72,7 +70,6 @@ class ManualWorkcellCoordinator(Node):
                 print(f"❌ 에러 발생: {e}")
 
     def request_job(self, ws_num, job):
-        """기존 _run_job 로직을 호출"""
         with self._busy_lock:
             if self._busy:
                 print("⚠️ 현재 다른 작업이 진행 중입니다. 잠시만 기다려주세요.")
@@ -80,8 +77,7 @@ class ManualWorkcellCoordinator(Node):
             self._busy = True
 
         print(f"🚀 [작업 시작] WS{ws_num}에서 {job} 수행")
-        
-        # 별도 스레드에서 서비스 호출 실행
+
         t = threading.Thread(target=self._run_job_logic, args=(ws_num, job))
         t.daemon = True
         t.start()
@@ -91,24 +87,27 @@ class ManualWorkcellCoordinator(Node):
             req = RunWS.Request()
             req.ws = ws_num
 
-            # 작업에 맞는 클라이언트 선택
             cli = self.load_cli if job == "PICK" else self.unload_cli
-            
             future = cli.call_async(req)
-            
-            # 응답 대기
+
             while rclpy.ok() and not future.done():
                 time.sleep(0.1)
 
             res = future.result()
             if res and res.success:
                 self.get_logger().info(f"✅ 작업 성공: WS{ws_num}, {job}")
-                # 완료 신호 전송 (필요 시)
+
+                # 실제 사용한 pose는 load node가 응답 message에 넣어줌
+                if job == "PICK" and res.message:
+                    print("\n🎯 Used Pick Pose")
+                    print(res.message + "\n")
+
                 out = String()
                 out.data = f"DONE,WS{ws_num},{job}3"
                 self.tx_pub.publish(out)
             else:
-                self.get_logger().error(f"❌ 작업 실패: 서비스 응답이 False이거나 없습니다.")
+                err_msg = res.message if res else "서비스 응답이 없습니다."
+                self.get_logger().error(f"❌ 작업 실패: {err_msg}")
 
         except Exception as e:
             self.get_logger().error(f"❗ 실행 중 에러 발생: {e}")
@@ -116,6 +115,7 @@ class ManualWorkcellCoordinator(Node):
             with self._busy_lock:
                 self._busy = False
             print("🔓 이제 다음 명령을 입력할 수 있습니다.")
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -129,6 +129,7 @@ def main(args=None):
     finally:
         node.destroy_node()
         rclpy.shutdown()
+
 
 if __name__ == "__main__":
     main()
