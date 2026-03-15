@@ -3,15 +3,11 @@ import os
 import time
 import math
 import yaml
-import threading
 from collections import deque
 
 import cv2
 import numpy as np
 import open3d as o3d
-import matplotlib
-matplotlib.use('TkAgg')
-import matplotlib.pyplot as plt
 
 import rclpy
 from rclpy.node import Node
@@ -46,6 +42,7 @@ class Yolo3DNode(Node):
         self.declare_parameter('track_match_px', 80.0)
         self.declare_parameter('track_timeout_sec', 1.0)
         self.declare_parameter('window_size', 15)
+        self.declare_parameter('result_timeout_sec', 0.5)
 
         model_path = self.get_parameter('model_path').value
         yaml_path = self.get_parameter('yaml_path').value
@@ -55,6 +52,7 @@ class Yolo3DNode(Node):
         self.track_match_px = float(self.get_parameter('track_match_px').value)
         self.track_timeout_sec = float(self.get_parameter('track_timeout_sec').value)
         self.window_size = int(self.get_parameter('window_size').value)
+        self.result_timeout_sec = float(self.get_parameter('result_timeout_sec').value)
 
         # --------------------------------------------------
         # 2. Load model / configs
@@ -74,38 +72,19 @@ class Yolo3DNode(Node):
         self.scene_pcd_vis = o3d.geometry.PointCloud()
         self.vis.add_geometry(self.scene_pcd_vis)
 
-        # self.cam_axis = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
-        # self.vis.add_geometry(self.cam_axis)
-
         self.track_axis_map = {}      # track_id -> axis mesh
         self.track_axis_trans = {}    # track_id -> applied transform
         self.track_states = {}        # track_id -> state dict
         self.track_counter = 0
 
         self.view_inited = False
-        self.last_scene_center = np.array([0.0, 0.0, 0.5], dtype=np.float64)
 
         # --------------------------------------------------
         # 4. States
         # --------------------------------------------------
         self.intrinsics = None
         self.depth_scale = 0.001
-
-        self.latest_result = {
-            "success": False,
-            "x_mm": 0.0,
-            "y_mm": 0.0,
-            "z_mm": 0.0,
-            "roll_deg": 0.0,
-            "pitch_deg": 0.0,
-            "yaw_deg": 0.0,
-            "id": -1,
-            "track_id": None,
-            "stamp": 0.0,
-        }
-
-        self.plot_len = 50
-        self.plot_data = {k: deque(maxlen=self.plot_len) for k in ['x', 'y', 'z', 'roll', 'pitch', 'yaw']}
+        self.clear_latest_result()
 
         # --------------------------------------------------
         # 5. ROS comms
@@ -142,9 +121,24 @@ class Yolo3DNode(Node):
             self.handle_get_pose
         )
 
-        threading.Thread(target=self.init_plot_thread, daemon=True).start()
-
         self.get_logger().info("Yolo3DNode initialized.")
+
+    # ======================================================
+    # Helpers
+    # ======================================================
+    def clear_latest_result(self):
+        self.latest_result = {
+            "success": False,
+            "x_mm": 0.0,
+            "y_mm": 0.0,
+            "z_mm": 0.0,
+            "roll_deg": 0.0,
+            "pitch_deg": 0.0,
+            "yaw_deg": 0.0,
+            "id": -1,
+            "track_id": None,
+            "stamp": 0.0,
+        }
 
     # ======================================================
     # YAML / model loading
@@ -171,9 +165,8 @@ class Yolo3DNode(Node):
                 "pitch": float(sym_val.get("pitch", 360.0)),
                 "yaw": float(sym_val.get("yaw", 360.0)),
             }
-        else:
-            s = float(sym_val) if sym_val is not None else 360.0
-            return {"roll": s, "pitch": s, "yaw": s}
+        s = float(sym_val) if sym_val is not None else 360.0
+        return {"roll": s, "pitch": s, "yaw": s}
 
     def load_models_from_yaml(self, yaml_path):
         if not os.path.exists(yaml_path):
@@ -260,17 +253,18 @@ class Yolo3DNode(Node):
 
     def handle_get_pose(self, request, response):
         d = self.latest_result
-        if d["success"]:
+        now = time.time()
+
+        if d["success"] and (now - d["stamp"] < self.result_timeout_sec):
             response.success = True
             response.detected_id = int(d["id"])
             response.x = d["x_mm"] / 1000.0
             response.y = d["y_mm"] / 1000.0
             response.z = d["z_mm"] / 1000.0
-            response.rx = float(d["roll_deg"])
-            response.ry = float(d["pitch_deg"])
             response.rz = float(d["yaw_deg"])
         else:
             response.success = False
+
         return response
 
     # ======================================================
@@ -388,6 +382,26 @@ class Yolo3DNode(Node):
             yaw = 0.0
         return roll, pitch, yaw
 
+    def enforce_z_not_opposite_camera(self, R):
+        z_ref = np.array([0.0, 0.0, -1.0], dtype=np.float64)
+
+        x_axis = R[:, 0].copy()
+        y_axis = R[:, 1].copy()
+        z_axis = R[:, 2].copy()
+
+        if np.dot(z_axis, z_ref) < 0:
+            z_axis = -z_axis
+            x_axis = -x_axis
+
+            y_axis = np.cross(z_axis, x_axis)
+            y_axis = y_axis / (np.linalg.norm(y_axis) + 1e-12)
+
+            x_axis = np.cross(y_axis, z_axis)
+            x_axis = x_axis / (np.linalg.norm(x_axis) + 1e-12)
+
+        R_fixed = np.column_stack((x_axis, y_axis, z_axis))
+        return R_fixed
+
     def generate_pointcloud(self, depth_image):
         h, w = depth_image.shape
         u, v = np.meshgrid(np.arange(w), np.arange(h))
@@ -457,11 +471,6 @@ class Yolo3DNode(Node):
         state["latest_result"] = result
         self.latest_result = result
 
-        for k in ['x', 'y', 'z']:
-            self.plot_data[k].append(result[f"{k}_mm"])
-        for k in ['roll', 'pitch', 'yaw']:
-            self.plot_data[k].append(result[f"{k}_deg"])
-
         return result
 
     def update_track_axis(self, track_id, final_trans):
@@ -507,6 +516,7 @@ class Yolo3DNode(Node):
 
         if len(results) == 0 or results[0].boxes is None or len(results[0].boxes) == 0:
             self.cleanup_stale_tracks()
+            self.clear_latest_result()
             self.update_visualization(color_image, None)
             return
 
@@ -519,6 +529,7 @@ class Yolo3DNode(Node):
         valid_idx = np.isfinite(pcd_all[:, 2]) & (pcd_all[:, 2] > 0)
         if np.count_nonzero(valid_idx) < 100:
             self.cleanup_stale_tracks()
+            self.clear_latest_result()
             self.update_visualization(color_image, None)
             return
 
@@ -555,6 +566,7 @@ class Yolo3DNode(Node):
         merged_pcd = None
         scene_points = ground_removed_pts
         scene_colors = None
+        frame_has_valid_pose = False
 
         if len(scene_points) > 0:
             scene_colors = np.tile(
@@ -620,9 +632,11 @@ class Yolo3DNode(Node):
                     o3d.pipelines.registration.TransformationEstimationPointToPlane()
                 )
 
-                final_trans = reg_p2p.transformation
+                final_trans = np.array(reg_p2p.transformation, dtype=np.float64, copy=True)
+                final_trans[:3, :3] = self.enforce_z_not_opposite_camera(final_trans[:3, :3])
 
                 result = self.update_track_filter_and_result(track_id, cls_id, final_trans)
+                frame_has_valid_pose = True
                 self.update_track_axis(track_id, final_trans)
 
                 color_bgr = (
@@ -637,12 +651,18 @@ class Yolo3DNode(Node):
                 txt_xyz = f"XYZ(mm): {result['x_mm']:.1f}, {result['y_mm']:.1f}, {result['z_mm']:.1f}"
                 txt_rpy = f"RPY(deg): {result['roll_deg']:.1f}, {result['pitch_deg']:.1f}, {result['yaw_deg']:.1f}"
 
-                cv2.putText(color_image, name_txt, (x1, max(20, y1 - 55)),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, color_bgr, 2)
-                cv2.putText(color_image, txt_xyz, (x1, max(20, y1 - 30)),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, color_bgr, 2)
-                cv2.putText(color_image, txt_rpy, (x1, max(20, y1 - 5)),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, color_bgr, 2)
+                cv2.putText(
+                    color_image, name_txt, (x1, max(20, y1 - 55)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, color_bgr, 2
+                )
+                cv2.putText(
+                    color_image, txt_xyz, (x1, max(20, y1 - 30)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, color_bgr, 2
+                )
+                cv2.putText(
+                    color_image, txt_rpy, (x1, max(20, y1 - 5)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, color_bgr, 2
+                )
 
             except Exception as e:
                 self.get_logger().warn(
@@ -651,6 +671,9 @@ class Yolo3DNode(Node):
                 continue
 
         self.cleanup_stale_tracks()
+
+        if not frame_has_valid_pose:
+            self.clear_latest_result()
 
         # --------------------------------------------------
         # Build final colored scene point cloud
@@ -689,36 +712,6 @@ class Yolo3DNode(Node):
 
         except Exception as e:
             self.get_logger().warn(f"Open3D visualization update failed: {e}")
-
-    # ======================================================
-    # Plot thread
-    # ======================================================
-    def init_plot_thread(self):
-        plt.ion()
-        fig, axes = plt.subplots(3, 2, figsize=(8, 6))
-
-        keys = ['x', 'roll', 'y', 'pitch', 'z', 'yaw']
-        lines = {k: axes.flat[i].plot([], [], label=k.upper())[0] for i, k in enumerate(keys)}
-        ylims = [(-300, 300), (-180, 180), (-300, 300), (-180, 180), (0, 1200), (-180, 180)]
-
-        for i, ax in enumerate(axes.flat):
-            ax.set_ylim(ylims[i])
-            ax.set_xlim(0, self.plot_len)
-            ax.grid(True)
-            ax.legend(loc='upper right')
-
-        plt.tight_layout()
-
-        while rclpy.ok():
-            try:
-                for k in keys:
-                    y = list(self.plot_data[k])
-                    x = list(range(len(y)))
-                    lines[k].set_data(x, y)
-                fig.canvas.draw_idle()
-                plt.pause(0.1)
-            except Exception:
-                plt.pause(0.1)
 
 
 def main():

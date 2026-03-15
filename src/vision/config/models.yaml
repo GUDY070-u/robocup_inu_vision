@@ -6,7 +6,7 @@ objects:
     symmetry:
       roll: 180.0
       pitch: 180.0
-      yaw: 90.0
+      yaw: 360.0
     icp_dist: 0.05
     voxel: 0.005
     min_pts: 50
@@ -20,7 +20,7 @@ objects:
     symmetry:
       roll: 180.0
       pitch: 180.0
-      yaw: 90.0
+      yaw: 360.0
     icp_dist: 0.05
     voxel: 0.005
     min_pts: 50
@@ -33,7 +33,7 @@ objects:
     thickness: 0.024
     symmetry:
       roll: 360.0
-      pitch: 13600
+      pitch: 360.0
       yaw: 360.0
     icp_dist: 0.03
     voxel: 0.003
@@ -62,7 +62,7 @@ objects:
     symmetry:
       roll: 180.0
       pitch: 180.0
-      yaw: 90.0
+      yaw: 360.0
     icp_dist: 0.05
     voxel: 0.005
     min_pts: 50
@@ -76,7 +76,7 @@ objects:
     symmetry:
       roll: 180.0
       pitch: 180.0
-      yaw: 90.0
+      yaw: 360.0
     icp_dist: 0.05
     voxel: 0.005
     min_pts: 50
