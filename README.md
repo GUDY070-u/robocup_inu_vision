@@ -53,7 +53,8 @@
     is
     ros2 service call /vision/get_object_pose msgs_pkg/srv/GetObjectPose "{}"
 
-# cd <ros2 작업 폴더>
+# Case 2 : Launch 파일 실행
+    cd <ros2 작업 폴더>
     rb
     sb
     is
