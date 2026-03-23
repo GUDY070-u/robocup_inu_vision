@@ -1,4 +1,4 @@
-🛠️ Requirements
+#🛠️ Requirements
 - Ubuntu 22.04
 - ROS2 Humble
 - Intel RealSense D435
@@ -9,7 +9,7 @@
 
 P.S : <ros2_ws> - 사용하는 로스 워크 스페이스 이름 변경 필
 
-⚡ Alias 설정 (권장)
+#⚡ Alias 설정 (권장)
 
 .bashrc에 아래 내용을 추가하면 명령어를 간단히 사용할 수 있습니다.
 
@@ -25,7 +25,7 @@ alias cbc='rm -rf build install log && colcon build --symlink-install'
 | is    | workspace 환경 설정 |
 | cbc   | 클린 빌드           |
 
-🔧 Build 방법
+#🔧 Build 방법
 cd ~/<ros2_ws>
  rb
  sb
