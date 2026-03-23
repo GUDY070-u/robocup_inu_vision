@@ -26,13 +26,9 @@ alias cbc='rm -rf build install log && colcon build --symlink-install'
 | cbc   | 클린 빌드           |
 
 # 🔧 Build 방법
-cd ~/<ros2_ws>
-
-rb
-
-
-sb
-
-cbc
- 
-is
+    cd ~/<ros2_ws>
+    rb
+    sb
+    is
+    cbc
+    is
