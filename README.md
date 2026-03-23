@@ -26,7 +26,7 @@
 | cbc   | 클린 빌드           |
 
 # 🔧 Build 방법
-    cd ~/<ros2_ws>
+    cd ~/<ros2 작업 폴더>
     rb
     sb
     is
