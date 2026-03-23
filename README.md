@@ -31,6 +31,7 @@
     sb
     is
     cbc
+    
 # 실행
 실행후 오류 발생시 경로 문제 src/vision/vision/yolo_3d_node.py의 model_path와 yaml_path 경로 수정 필요
 ## Case 1. 단독 비전 노드 사용
