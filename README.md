@@ -31,9 +31,10 @@
     sb
     is
     cbc
-
-# Case 1. 단독 비전 노드 사용
-## 1) RealSense 노드 실행
+# 실행
+실행후 오류 발생시 경로 문제 src/vision/vision/yolo_3d_node.py의 model_path와 yaml_path 경로 수정 필요
+## Case 1. 단독 비전 노드 사용
+### 1) RealSense 노드 실행
     cd <ros2 작업 폴더>
     rb
     sb
@@ -41,24 +42,22 @@
     cbc
     ros2 launch realsense2_camera rs_launch.py align_depth.enable:=true
 
-## 2) YOLO 3D 노드 실행
+### 2) YOLO 3D 노드 실행
     rb
     sb
     is
     ros2 run vision yolo_3d_node.py
 
-## 3) 물체 자세 서비스 호출
+### 3) 물체 자세 서비스 호출
     rb
     sb
     is
     ros2 service call /vision/get_object_pose msgs_pkg/srv/GetObjectPose "{}"
 
-# Case 2 : Launch 파일 실행
+## Case 2 : Launch 파일 실행
     cd <ros2 작업 폴더>
     rb
     sb
     is
     cbc
     ros2 launch launch_pkg demo.launch.py
-
-실행후 오류 발생시 경로 문제 src/vision/vision/yolo_3d_node.py의 model_path와 yaml_path 경로 수정 필요
