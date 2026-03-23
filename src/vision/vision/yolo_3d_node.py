@@ -12,7 +12,6 @@ import open3d as o3d
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
-from ament_index_python.packages import get_package_share_directory
 
 from sensor_msgs.msg import Image, CameraInfo
 from cv_bridge import CvBridge
@@ -29,20 +28,14 @@ class Yolo3DNode(Node):
         # --------------------------------------------------
         # 1. Parameters
         # --------------------------------------------------
-        pkg_path = get_package_share_directory('vision')
-
-        default_model_path = os.path.join(
-            pkg_path, 'yolo_models', '0128_train', 'weights', 'best.pt'
+        self.declare_parameter(
+            'model_path',
+            '/home/user/ros2_ws/src/vision/yolo_models/0128_train/weights/best.pt'
         )
-        default_yaml_path = os.path.join(
-            pkg_path, 'config', 'models.yaml'
+        self.declare_parameter(
+            'yaml_path',
+            '/home/user/ros2_ws/src/vision/config/models.yaml'
         )
-
-        self.declare_parameter('model_path', default_model_path)
-        self.declare_parameter('yaml_path', default_yaml_path)
-
-        self.model_path = self.get_parameter('model_path').value
-        self.yaml_path = self.get_parameter('yaml_path').value
         self.declare_parameter('model_device', 'cuda:0')
         self.declare_parameter('ground_dist_thresh', 0.01)
         self.declare_parameter('default_conf', 0.7)
