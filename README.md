@@ -60,5 +60,4 @@
     cbc
     ros2 launch launch_pkg demo.launch.py
 
-실행후 오류 발생시 경로 문제 [e10952d853b851156a39add5450c3908c0008a41](https://github.com/GUDY070-u/robocup_inu_vision/commit/e10952d853b851156a39add5450c3908c0008a41)로 롤백후 절대 경로 사용
-    
+실행후 오류 발생시 경로 문제 src/vision/vision/yolo_3d_node.py의 model_path와 yaml_path 경로 수정 필요
