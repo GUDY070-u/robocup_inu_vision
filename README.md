@@ -7,7 +7,7 @@
 - Open3D
 - PyTorch (YOLO)
 
-P.S : <ros2_ws> - 사용하는 로스 워크 스페이스 이름 변경 필
+## P.S : <ros2_ws> - 사용하는 로스 워크 스페이스 이름 변경 필요
 
 # ⚡ Alias 설정 (권장)
 
@@ -27,7 +27,12 @@ alias cbc='rm -rf build install log && colcon build --symlink-install'
 
 # 🔧 Build 방법
 cd ~/<ros2_ws>
- rb
- sb
- cbc
- is
+
+rb
+
+
+sb
+
+cbc
+ 
+is
