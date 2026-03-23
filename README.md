@@ -27,7 +27,7 @@ alias cbc='rm -rf build install log && colcon build --symlink-install'
 
 🔧 Build 방법
 cd ~/<ros2_ws>
-rb
-sb
-cbc
-is
+ rb
+ sb
+ cbc
+ is
