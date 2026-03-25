@@ -72,9 +72,9 @@ class Yolo3DNode(Node):
         self.scene_pcd_vis = o3d.geometry.PointCloud()
         self.vis.add_geometry(self.scene_pcd_vis)
 
-        self.track_axis_map = {}      # track_id -> axis mesh
-        self.track_axis_trans = {}    # track_id -> applied transform
-        self.track_states = {}        # track_id -> state dict
+        self.track_axis_map = {}
+        self.track_axis_trans = {}
+        self.track_states = {}
         self.track_counter = 0
 
         self.view_inited = False
@@ -502,7 +502,6 @@ class Yolo3DNode(Node):
             self.get_logger().warn(f"CV bridge conversion failed: {e}")
             return
 
-        # YOLO inference
         try:
             results = self.model.predict(
                 source=color_image,
@@ -524,7 +523,6 @@ class Yolo3DNode(Node):
         cls_ids = results[0].boxes.cls.cpu().numpy()
         confs = results[0].boxes.conf.cpu().numpy() if results[0].boxes.conf is not None else np.ones(len(boxes))
 
-        # Depth -> point cloud
         pcd_all, u_map, v_map = self.generate_pointcloud(depth_image)
         valid_idx = np.isfinite(pcd_all[:, 2]) & (pcd_all[:, 2] > 0)
         if np.count_nonzero(valid_idx) < 100:
@@ -537,7 +535,6 @@ class Yolo3DNode(Node):
         u_valid = u_map.reshape(-1)[valid_idx]
         v_valid = v_map.reshape(-1)[valid_idx]
 
-        # Ground removal
         ground_removed_pts = pcd_valid
         u_ng = u_valid
         v_ng = v_valid
@@ -560,9 +557,6 @@ class Yolo3DNode(Node):
         except Exception as e:
             self.get_logger().warn(f"Ground removal failed. Use original valid cloud. error={e}")
 
-        # --------------------------------------------------
-        # Scene color initialization
-        # --------------------------------------------------
         merged_pcd = None
         scene_points = ground_removed_pts
         scene_colors = None
@@ -574,9 +568,6 @@ class Yolo3DNode(Node):
                 (len(scene_points), 1)
             )
 
-        # --------------------------------------------------
-        # Per detection
-        # --------------------------------------------------
         for idx, (x1, y1, x2, y2) in enumerate(boxes.astype(int)):
             cls_id = int(cls_ids[idx])
             det_conf = float(confs[idx])
@@ -594,7 +585,6 @@ class Yolo3DNode(Node):
             if len(roi_pts) < cfg["min_pts"]:
                 continue
 
-            # YAML color를 scene color에 직접 반영
             if scene_colors is not None:
                 roi_color = np.array(cfg["color"], dtype=np.float64)
                 scene_colors[roi_mask] = roi_color
@@ -675,9 +665,6 @@ class Yolo3DNode(Node):
         if not frame_has_valid_pose:
             self.clear_latest_result()
 
-        # --------------------------------------------------
-        # Build final colored scene point cloud
-        # --------------------------------------------------
         if scene_colors is not None and len(scene_points) > 0:
             try:
                 merged_pcd = o3d.geometry.PointCloud()
@@ -702,9 +689,25 @@ class Yolo3DNode(Node):
                 self.scene_pcd_vis.colors = merged_pcd.colors
                 self.vis.update_geometry(self.scene_pcd_vis)
 
-            # 처음 한 번만 전체가 보이도록 자동 카메라 설정
             if not self.view_inited:
                 self.vis.reset_view_point(True)
+
+                ctr = self.vis.get_view_control()
+                cam = ctr.convert_to_pinhole_camera_parameters()
+
+                extrinsic = np.asarray(cam.extrinsic).copy()
+
+                Rz = np.array([
+                    [-1.0,  0.0, 0.0],
+                    [ 0.0, -1.0, 0.0],
+                    [ 0.0,  0.0, 1.0]
+                ], dtype=np.float64)
+
+                extrinsic[:3, :3] = extrinsic[:3, :3] @ Rz
+                cam.extrinsic = extrinsic
+
+                ctr.convert_from_pinhole_camera_parameters(cam)
+
                 self.view_inited = True
 
             self.vis.poll_events()
@@ -726,8 +729,14 @@ def main():
             cv2.destroyAllWindows()
         except Exception:
             pass
-        node.destroy_node()
-        rclpy.shutdown()
+
+        try:
+            node.destroy_node()
+        except Exception:
+            pass
+
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':
