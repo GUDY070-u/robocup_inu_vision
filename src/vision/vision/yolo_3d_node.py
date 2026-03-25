@@ -190,7 +190,6 @@ class Yolo3DNode(Node):
                 thickness = float(obj.get("thickness", 0.0))
                 symmetry = self.normalize_symmetry(obj.get("symmetry", 360.0))
                 icp_dist = float(obj.get("icp_dist", 0.05))
-                voxel = float(obj.get("voxel", 0.005))
                 min_pts = int(obj.get("min_pts", 50))
                 color = obj.get("color", [0.7, 0.7, 0.7])
                 axis_size = float(obj.get("axis_size", 0.08))
@@ -218,7 +217,6 @@ class Yolo3DNode(Node):
                     "half_thickness": thickness / 2.0,
                     "symmetry": symmetry,
                     "icp_dist": icp_dist,
-                    "voxel": voxel,
                     "min_pts": min_pts,
                     "color": [float(color[0]), float(color[1]), float(color[2])],
                     "axis_size": axis_size,
@@ -246,8 +244,6 @@ class Yolo3DNode(Node):
                 'fy': msg.k[4],
                 'ppx': msg.k[2],
                 'ppy': msg.k[5],
-                'width': msg.width,
-                'height': msg.height
             }
             self.get_logger().info("Camera intrinsics received.")
 
@@ -300,9 +296,19 @@ class Yolo3DNode(Node):
     def create_axis_for_track(self, track_id, cls_id):
         cfg = self.object_configs[cls_id]
         axis = o3d.geometry.TriangleMesh.create_coordinate_frame(size=cfg["axis_size"])
-        self.vis.add_geometry(axis)
+
+        # 축 추가 시 기존 뷰를 다시 잡지 않도록 함
+        self.vis.add_geometry(axis, reset_bounding_box=False)
+
         self.track_axis_map[track_id] = axis
         self.track_axis_trans[track_id] = np.eye(4)
+
+        # 이미 뷰가 초기화된 뒤라면 다시 고정
+        # if self.view_inited:
+        #     try:
+        #         self.apply_fixed_view()
+        #     except Exception as e:
+        #         self.get_logger().warn(f"apply_fixed_view failed after axis add: {e}")
 
     def match_or_create_track(self, cls_id, bbox_center):
         now = time.time()
@@ -489,6 +495,27 @@ class Yolo3DNode(Node):
             self.get_logger().warn(f"Axis update failed for {track_id}: {e}")
 
     # ======================================================
+    # Infra visualization
+    # ======================================================
+    def apply_fixed_view(self):
+        ctr = self.vis.get_view_control()
+
+        # scene point cloud 기준으로 중심 계산
+        if len(self.scene_pcd_vis.points) == 0:
+            return
+
+        bbox = self.scene_pcd_vis.get_axis_aligned_bounding_box()
+        center = bbox.get_center()
+
+        ctr.set_lookat(center)
+
+        # 화면 방향 고정
+        ctr.set_front([0.0, 0.0, -1.0])
+        ctr.set_up([0.0, -1.0, 0.0])
+
+        ctr.set_zoom(0.7)
+    
+    # ======================================================
     # Main processing
     # ======================================================
     def process_callback(self, color_msg, depth_msg):
@@ -502,6 +529,7 @@ class Yolo3DNode(Node):
             self.get_logger().warn(f"CV bridge conversion failed: {e}")
             return
 
+        # YOLO inference
         try:
             results = self.model.predict(
                 source=color_image,
@@ -516,7 +544,6 @@ class Yolo3DNode(Node):
         if len(results) == 0 or results[0].boxes is None or len(results[0].boxes) == 0:
             self.cleanup_stale_tracks()
             self.clear_latest_result()
-            self.update_visualization(color_image, None)
             return
 
         boxes = results[0].boxes.xyxy.cpu().numpy()
@@ -528,7 +555,6 @@ class Yolo3DNode(Node):
         if np.count_nonzero(valid_idx) < 100:
             self.cleanup_stale_tracks()
             self.clear_latest_result()
-            self.update_visualization(color_image, None)
             return
 
         pcd_valid = pcd_all[valid_idx]
@@ -578,6 +604,13 @@ class Yolo3DNode(Node):
             cfg = self.object_configs[cls_id]
             if det_conf < cfg["conf"]:
                 continue
+
+            color_bgr = (
+                int(cfg["color"][2] * 255),
+                int(cfg["color"][1] * 255),
+                int(cfg["color"][0] * 255)
+            )
+
 
             roi_mask = (u_ng >= x1) & (u_ng < x2) & (v_ng >= y1) & (v_ng < y2)
             roi_pts = ground_removed_pts[roi_mask]
@@ -629,18 +662,11 @@ class Yolo3DNode(Node):
                 frame_has_valid_pose = True
                 self.update_track_axis(track_id, final_trans)
 
-                color_bgr = (
-                    int(cfg["color"][2] * 255),
-                    int(cfg["color"][1] * 255),
-                    int(cfg["color"][0] * 255)
-                )
-
-                cv2.rectangle(color_image, (x1, y1), (x2, y2), color_bgr, 2)
-
                 name_txt = f"{cfg['name']} (ID:{cls_id}, T:{track_id})"
                 txt_xyz = f"XYZ(mm): {result['x_mm']:.1f}, {result['y_mm']:.1f}, {result['z_mm']:.1f}"
                 txt_rpy = f"RPY(deg): {result['roll_deg']:.1f}, {result['pitch_deg']:.1f}, {result['yaw_deg']:.1f}"
 
+                cv2.rectangle(color_image, (x1, y1), (x2, y2), color_bgr, 2)
                 cv2.putText(
                     color_image, name_txt, (x1, max(20, y1 - 55)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, color_bgr, 2
@@ -673,8 +699,8 @@ class Yolo3DNode(Node):
             except Exception as e:
                 self.get_logger().warn(f"Merged point cloud build failed: {e}")
                 merged_pcd = None
-
         self.update_visualization(color_image, merged_pcd)
+
 
     # ======================================================
     # Visualization
@@ -689,25 +715,9 @@ class Yolo3DNode(Node):
                 self.scene_pcd_vis.colors = merged_pcd.colors
                 self.vis.update_geometry(self.scene_pcd_vis)
 
-            if not self.view_inited:
+            if not self.view_inited and merged_pcd is not None and len(merged_pcd.points) > 0:
                 self.vis.reset_view_point(True)
-
-                ctr = self.vis.get_view_control()
-                cam = ctr.convert_to_pinhole_camera_parameters()
-
-                extrinsic = np.asarray(cam.extrinsic).copy()
-
-                Rz = np.array([
-                    [-1.0,  0.0, 0.0],
-                    [ 0.0, -1.0, 0.0],
-                    [ 0.0,  0.0, 1.0]
-                ], dtype=np.float64)
-
-                extrinsic[:3, :3] = extrinsic[:3, :3] @ Rz
-                cam.extrinsic = extrinsic
-
-                ctr.convert_from_pinhole_camera_parameters(cam)
-
+                self.apply_fixed_view()
                 self.view_inited = True
 
             self.vis.poll_events()
